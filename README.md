@@ -18,14 +18,3 @@
 * **Database:** SQLite3 (개발 환경), PostgreSQL/MySQL (배포 시)
 * **AI/ML:** **Custom AI Model Integration** (또는 OpenAI/Gemini API 등)
 * **Deployment:** Gunicorn, Nginx (예시)
-
----
-
-## ⚙️ 개발 환경 설정 가이드
-
-### 1. 가상 환경 설정
-```bash
-# 가상 환경 생성 및 활성화
-python -m venv venv
-source venv/bin/activate  # macOS/Linux
-venv\Scripts\activate     # Windows
