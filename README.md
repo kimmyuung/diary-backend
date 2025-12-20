@@ -1,50 +1,69 @@
-#  AI 기반 감성 일기 앱
+# 📔 감성 일기 (AI Emotion Diary)
 
-사용자가 작성한 일기를 AI가 자동으로 분석하고, 감정을 시각화하며, 맞춤형 피드백을 제공하는 개인화된 일기 애플리케이션입니다.
+> **당신의 하루를 AI가 듣고, 이해하고, 그림으로 그려줍니다.**
 
-## 🌟 주요 기능
+사용자가 작성(또는 말한) 일기를 AI가 분석하여 감정을 추출하고, 그날의 기분에 맞는 그림을 그려주는 스마트한 일기장입니다. 웹과 모바일(iOS/Android) 모두를 지원하며, 개인정보는 안전하게 암호화되어 저장됩니다.
 
-- **AI 일기 작성**: 사용자 입력을 AI가 감성적인 일기로 변환
-- **감정 분석**: 일기 내용에서 감정을 추출하고 시각화
-- **이미지 생성**: DALL-E를 활용한 일기 맞춤형 이미지 생성
-- **음성 입력**: Whisper API를 통한 음성-텍스트 변환
-- **프라이버시 보호**: 암호화된 데이터 저장
+![Project Banner](https://via.placeholder.com/1200x600?text=AI+Emotion+Diary) 
+*(추후 실제 스크린샷으로 교체 예정)*
 
-## 🏗️ 시스템 아키텍처
+---
 
-### Frontend
-- **React Native (Expo)** - 크로스 플랫폼 모바일 앱
-- **TypeScript** - 타입 안정성
-- **Axios** - API 통신
+## ✨ 주요 기능
 
-### Backend
-- **Django 4.x** - 웹 프레임워크
-- **Django REST Framework** - RESTful API
-- **Celery + Redis** - 비동기 AI 처리
-- **PostgreSQL** - 배포용 데이터베이스
+### 1. 🧠 AI 감정 분석 (Emotion Analysis)
+- **GPT-4o-mini**를 활용하여 일기 내용에서 8가지 핵심 감정(행복, 슬픔, 화남, 불안, 평온, 신남, 피곤, 사랑)을 분석합니다.
+- 단순한 키워드 매칭이 아닌, 문맥을 이해하여 정확한 감정을 파악합니다.
 
-### AI Services
-- **OpenAI GPT-4** - 일기 작성 및 감성 분석
-- **Whisper** - 음성-텍스트 변환
-- **DALL-E 3** - 이미지 생성
+### 2. 🎨 AI 그림 생성 (Image Generation)
+- **DALL-E 3**를 사용하여 일기 내용에 어울리는 감성적인 이미지를 자동으로 생성합니다.
+- (무료: 주 3회 / 프리미엄: 무제한)
 
-## 📁 프로젝트 구조
-diary-backend/
-├── config/              # Django 설정
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-├── diary/              # 메인 앱
-│   ├── models.py       # 데이터 모델
-│   ├── views.py        # API 뷰
-│   ├── serializers.py  # 직렬화
-│   ├── ai_service.py   # AI 로직
-│   └── tests/          # 테스트 코드
-├── venv/               # 가상 환경
-├── manage.py
-└── requirements.txt
+### 3. 🎙️ 음성 일기 (Voice to Text)
+- **Whisper API**를 통해 말하는 대로 일기가 작성됩니다.
+- 100개 이상의 언어를 지원하며, 높은 정확도로 텍스트 변환이 가능합니다.
 
-## 🚀 시작하기
+### 4. 📊 감정 리포트 (Emotion Reports)
+- **주간/월간 리포트**: 나의 감정 변화를 한눈에 볼 수 있는 통계와 그래프를 제공합니다.
+- **인사이트**: "이번 주는 주로 행복한 감정을 느꼈네요!"와 같은 맞춤형 코멘트를 제공합니다.
+
+### 5. 🔐 프라이버시 중심 (Privacy First)
+- 모든 일기 내용은 **AES-256** 알고리즘으로 암호화되어 데이터베이스에 저장됩니다.
+- 오직 본인만이 내용을 복호화하여 볼 수 있습니다.
+
+### 6. 📱 크로스 플랫폼 (Cross-Platform)
+- **React Native (Expo)** 기반으로 웹, iOS, Android 어디서든 완벽하게 동작합니다.
+- 반응형 디자인으로 모든 기기에서 최적화된 화면을 제공합니다.
+
+---
+
+## 🛠️ 기술 스택 (Tech Stack)
+
+| 구분 | 기술 | 설명 |
+|------|------|------|
+| **Frontend** | React Native (Expo) | 크로스 플랫폼 앱 개발 |
+| | TypeScript | 정적 타입 지원으로 안정성 확보 |
+| | Expo Router | 파일 기반 라우팅 |
+| | Axios | API 통신 |
+| **Backend** | Django 5.1 | 강력한 Python 웹 프레임워크 |
+| | Django REST Framework | RESTful API 구축 |
+| | SQLite / PostgreSQL | 데이터베이스 (개발/배포) |
+| **AI Models** | GPT-4o-mini | 고성능/저비용 감정 분석 |
+| | DALL-E 3 | 고품질 이미지 생성 |
+| | Whisper-1 | 음성 인식 (STT) |
+| **Security** | AES Encryption | 데이터 암호화 (Django Cryptography) |
+| | JWT | 안전한 사용자 인증 |
+
+---
+
+## 🚀 시작하기 (Getting Started)
+
+이 프로젝트는 `backend`와 `frontend` 두 개의 모듈로 구성되어 있습니다.
+
+### 사전 요구사항 (Prerequisites)
+- Node.js (v18 이상)
+- Python (3.12 이상)
+- OpenAI API Key
 
 ### 1. 저장소 클론
 ```bash
@@ -52,133 +71,74 @@ git clone https://github.com/kimmyuung/diary-backend.git
 cd diary-backend
 ```
 
-### 2. 가상 환경 설정
+### 2. Backend 설정 (Server)
+```bash
+cd backend
 
-**Windows (CMD):**
-```cmd
+# 가상환경 생성 및 실행
 python -m venv venv
-venv\Scripts\activate.bat
-```
-
-**Mac/Linux:**
-```bash
-python3 -m venv venv
+# Windows
+.\venv\Scripts\activate
+# Mac/Linux
 source venv/bin/activate
-```
 
-### 3. 패키지 설치
-```bash
+# 의존성 설치
 pip install -r requirements.txt
-```
 
-### 4. 환경 변수 설정
+# .env 설정 (루트 디렉토리)
+cp .env.example .env
+# .env 파일에 OPENAI_API_KEY 및 SECRET_KEY 입력
 
-`.env` 파일 생성:
-```env
-SECRET_KEY=your-secret-key-here
-DEBUG=True
-OPENAI_API_KEY=your-openai-api-key
-```
-
-### 5. 데이터베이스 마이그레이션
-```bash
-python manage.py makemigrations
+# DB 마이그레이션 및 실행
 python manage.py migrate
-```
-
-### 6. 개발 서버 실행
-```bash
 python manage.py runserver
 ```
+서버는 `http://localhost:8000`에서 실행됩니다.
 
-서버가 `http://127.0.0.1:8000/`에서 실행됩니다.
-
-## 🧪 테스트 실행
+### 3. Frontend 설정 (App/Web)
 ```bash
-# 모든 테스트 실행
-python manage.py test
+cd frontend
 
-# 특정 앱 테스트
-python manage.py test diary
+# 의존성 설치
+npm install
 
-# 커버리지 포함
-coverage run --source='.' manage.py test
-coverage report
+# .env 설정
+# .env 파일에 API_URL=http://localhost:8000 설정
+
+# 앱 실행 (Web)
+npm run web
+
+# 앱 실행 (iOS/Android)
+npm run ios
+npm run android
 ```
-
-## 📡 API 엔드포인트
-
-### 인증
-- `POST /api/token/` - JWT 토큰 발급
-- `POST /api/token/refresh/` - 토큰 갱신
-
-### 일기
-- `GET /api/diaries/` - 일기 목록
-- `POST /api/diaries/` - 일기 작성
-- `GET /api/diaries/{id}/` - 일기 상세
-- `PUT /api/diaries/{id}/` - 일기 수정
-- `DELETE /api/diaries/{id}/` - 일기 삭제
-
-### AI 기능
-- `POST /api/diaries/{id}/generate-image/` - 이미지 생성
-- `POST /api/analyze/` - 감정 분석
-- `POST /api/transcribe/` - 음성-텍스트 변환
-
-## 🛠️ 기술 스택
-
-| 카테고리 | 기술 |
-|---------|------|
-| **Backend** | Django 4.2, Django REST Framework |
-| **Database** | SQLite3 (개발), PostgreSQL (배포) |
-| **AI/ML** | OpenAI API (GPT-4, Whisper, DALL-E) |
-| **캐싱** | Redis |
-| **비동기 처리** | Celery |
-| **인증** | JWT (Simple JWT) |
-| **배포** | Gunicorn, Nginx, Docker |
-
-## 📊 개발 로드맵
-
-### ✅ Phase 1 - MVP (완료)
-- [x] Django 백엔드 구축
-- [x] RESTful API 구현
-- [x] 기본 CRUD 기능
-- [x] 감성 분석 기능
-
-### 🔄 Phase 2 - AI 고도화 (진행 중)
-- [ ] 이미지 생성 (DALL-E 3)
-- [ ] 감정 그래프 시각화
-- [ ] AI 피드백 개선
-
-### 📅 Phase 3 - 추가 기능
-- [ ] 음성 입력
-- [ ] 실시간 알림 (WebSocket)
-- [ ] 프리미엄 구독 시스템
-
-### 🚀 Phase 4 - 배포
-- [ ] Docker 컨테이너화
-- [ ] AWS 배포
-- [ ] CI/CD 파이프라인
-
-## 🤝 기여하기
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📝 라이선스
-
-MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일 참조
-
-## 👥 팀
-
-- **Backend Developer** - [kimmyuung](https://github.com/kimmyuung)
-
-## 📞 문의
-
-프로젝트 관련 문의: [GitHub Issues](https://github.com/kimmyuung/diary-backend/issues)
+웹은 `http://localhost:8081`에서 실행됩니다.
 
 ---
 
-⭐ 이 프로젝트가 도움이 되었다면 Star를 눌러주세요!
+## 📡 주요 API 엔드포인트
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| **POST** | `/api/token/` | 로그인 (JWT 발급) |
+| **GET** | `/api/diaries/` | 일기 목록 조회 |
+| **POST** | `/api/diaries/` | 일기 작성 (자동 감정 분석) |
+| **POST** | `/api/transcribe/` | 음성 파일을 텍스트로 변환 |
+| **GET** | `/api/diaries/report/` | 주간/월간 감정 리포트 |
+| **POST** | `/api/diaries/{id}/generate-image/` | AI 이미지 생성 |
+
+---
+
+## 📊 개발 로드맵 (Roadmap)
+
+- [x] **Phase 1: MVP** (일기 CRUD, 기본 감정 분석)
+- [x] **Phase 2: AI 고도화** (GPT-4o-mini, DALL-E 3, Whisper 적용)
+- [x] **Phase 3: 사용자 경험 개선** (리포트 화면, 음성 입력, SNS 스타일 UI)
+- [x] **Phase 4: 웹/앱 호환성** (SecureStore/localStorage 분기 처리)
+- [ ] **Phase 5: 배포 및 운영** (Docker, AWS EC2, CI/CD)
+
+---
+
+## 📝 라이선스
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
