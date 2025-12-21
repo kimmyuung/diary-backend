@@ -6,7 +6,10 @@ The `urlpatterns` list routes URLs to views. For more information please see:
 """
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework import permissions
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
 from diary.views import (
     TestConnectionView, TranscribeView, TranslateAudioView, SupportedLanguagesView,
     RegisterView, PasswordResetRequestView, PasswordResetConfirmView, FindUsernameView,
@@ -14,8 +17,47 @@ from diary.views import (
 )
 from config.healthcheck import HealthCheckView, SentryTestView
 
+# =============================================================================
+# Swagger/OpenAPI 스키마 설정
+# =============================================================================
+schema_view = get_schema_view(
+   openapi.Info(
+      title="AI Emotion Diary API",
+      default_version='v1',
+      description="""
+## 🌟 감성 일기 API
+
+당신의 하루를 AI가 듣고, 이해하고, 그림으로 그려줍니다.
+
+### 주요 기능
+- **일기 CRUD**: 일기 작성, 수정, 삭제, 조회
+- **AI 감정 분석**: GPT-4o-mini 기반 감정 분석
+- **AI 이미지 생성**: DALL-E 3 기반 이미지 생성
+- **음성 입력**: Whisper 기반 음성-텍스트 변환
+- **감정 리포트**: 주간/월간/연간 감정 통계
+
+### 인증
+JWT(JSON Web Token) 기반 인증을 사용합니다.
+1. `/api/token/`에서 토큰 발급
+2. 요청 헤더에 `Authorization: Bearer {access_token}` 추가
+      """,
+      terms_of_service="https://www.example.com/terms/",
+      contact=openapi.Contact(email="contact@emotionaldiary.com"),
+      license=openapi.License(name="MIT License"),
+   ),
+   public=True,
+   permission_classes=[permissions.AllowAny],
+)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # ==========================================================================
+    # API 문서 (Swagger/ReDoc)
+    # ==========================================================================
+    path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    path('api/docs.json', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     
     # 헬스체크 (모니터링용)
     path('api/health/', HealthCheckView.as_view(), name='health_check'),
@@ -47,4 +89,3 @@ urlpatterns = [
     # 일기 API
     path('api/', include('diary.urls')),
 ]
-

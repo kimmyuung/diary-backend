@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'drf_yasg',  # Swagger/OpenAPI 문서
     # Local apps
     'diary',
 ]
@@ -229,6 +230,32 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
     # 커스텀 예외 핸들러
     'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
+    
+    # ==========================================================================
+    # Rate Limiting (속도 제한) 설정
+    # 브루트포스 공격, DDoS, API 남용 방지
+    # ==========================================================================
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        # 기본 제한 (모든 엔드포인트에 적용)
+        'anon': '100/hour',           # 비로그인 사용자: 시간당 100회
+        'user': '1000/hour',          # 로그인 사용자: 시간당 1000회
+        
+        # 민감한 엔드포인트별 제한 (커스텀 Throttle 클래스에서 사용)
+        'login': '5/min',             # 로그인: 분당 5회 (브루트포스 방지)
+        'register': '5/hour',         # 회원가입: 시간당 5회 (스팸 계정 방지)
+        'password_reset': '3/hour',   # 비밀번호 재설정: 시간당 3회 (이메일 폭탄 방지)
+        'email_resend': '3/10min',    # 이메일 재전송: 10분당 3회
+        'ai_image': '20/day',         # AI 이미지 생성: 일당 20회 (비용 관리)
+        'transcription': '30/hour',   # 음성 인식: 시간당 30회 (비용 관리)
+        
+        # DDoS 기본 방어
+        'burst': '10/second',         # 버스트 제한: 초당 10회
+        'sustained': '10000/day',     # 지속적 사용: 일당 10000회
+    },
 }
 
 # Simple JWT 설정

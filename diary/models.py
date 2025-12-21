@@ -293,3 +293,262 @@ class PushToken(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.device_type} ({self.token[:20]}...)"
 
+
+class Tag(models.Model):
+    """
+    태그 모델
+    - 사용자별 태그 관리
+    - 일기 분류 및 검색에 활용
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='tags',
+        verbose_name='사용자'
+    )
+    name = models.CharField(
+        max_length=50,
+        verbose_name='태그명'
+    )
+    color = models.CharField(
+        max_length=7,
+        default='#6366F1',
+        verbose_name='태그 색상',
+        help_text='HEX 색상 코드 (예: #6366F1)'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = '태그'
+        verbose_name_plural = '태그들'
+        ordering = ['name']
+        # 같은 사용자가 동일한 태그명을 중복 생성할 수 없음
+        unique_together = ['user', 'name']
+        indexes = [
+            models.Index(fields=['user', 'name'], name='tag_user_name_idx'),
+        ]
+    
+    def __str__(self):
+        return f"#{self.name}"
+
+
+class DiaryTag(models.Model):
+    """
+    일기-태그 연결 모델 (중간 테이블)
+    - Many-to-Many 관계를 명시적으로 관리
+    """
+    diary = models.ForeignKey(
+        Diary,
+        on_delete=models.CASCADE,
+        related_name='diary_tags'
+    )
+    tag = models.ForeignKey(
+        Tag,
+        on_delete=models.CASCADE,
+        related_name='diary_tags'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = '일기 태그'
+        verbose_name_plural = '일기 태그들'
+        unique_together = ['diary', 'tag']
+    
+    def __str__(self):
+        return f"{self.diary.title} - #{self.tag.name}"
+
+
+class UserPreference(models.Model):
+    """
+    사용자 설정 모델
+    - 테마 (다크/라이트 모드)
+    - 알림 설정
+    - 기타 사용자 개인화 설정
+    """
+    
+    THEME_CHOICES = [
+        ('light', '라이트 모드'),
+        ('dark', '다크 모드'),
+        ('system', '시스템 설정'),
+    ]
+    
+    LANGUAGE_CHOICES = [
+        ('ko', '한국어'),
+        ('en', 'English'),
+        ('ja', '日本語'),
+    ]
+    
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='preference',
+        verbose_name='사용자'
+    )
+    
+    # 테마 설정
+    theme = models.CharField(
+        max_length=10,
+        choices=THEME_CHOICES,
+        default='system',
+        verbose_name='테마'
+    )
+    
+    # 언어 설정
+    language = models.CharField(
+        max_length=5,
+        choices=LANGUAGE_CHOICES,
+        default='ko',
+        verbose_name='언어'
+    )
+    
+    # 알림 설정
+    push_enabled = models.BooleanField(
+        default=True,
+        verbose_name='푸시 알림 허용'
+    )
+    daily_reminder_enabled = models.BooleanField(
+        default=False,
+        verbose_name='일기 작성 알림'
+    )
+    daily_reminder_time = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name='일기 알림 시간',
+        help_text='매일 이 시간에 일기 작성 알림을 보냅니다'
+    )
+    
+    # AI 기능 설정
+    auto_emotion_analysis = models.BooleanField(
+        default=True,
+        verbose_name='자동 감정 분석',
+        help_text='일기 저장 시 자동으로 감정 분석'
+    )
+    
+    # 개인정보 설정
+    show_location = models.BooleanField(
+        default=True,
+        verbose_name='위치 정보 표시'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = '사용자 설정'
+        verbose_name_plural = '사용자 설정들'
+    
+    def __str__(self):
+        return f"{self.user.username}의 설정"
+    
+    @classmethod
+    def get_or_create_for_user(cls, user):
+        """사용자의 설정을 가져오거나 기본값으로 생성"""
+        preference, created = cls.objects.get_or_create(user=user)
+        return preference
+
+
+class DiaryTemplate(models.Model):
+    """
+    일기 템플릿 모델
+    - 시스템 기본 템플릿 (user=null)
+    - 사용자 커스텀 템플릿
+    """
+    
+    TEMPLATE_TYPE_CHOICES = [
+        ('system', '시스템 템플릿'),
+        ('user', '사용자 템플릿'),
+    ]
+    
+    CATEGORY_CHOICES = [
+        ('daily', '일상'),
+        ('gratitude', '감사'),
+        ('goal', '목표'),
+        ('reflection', '회고'),
+        ('emotion', '감정'),
+        ('travel', '여행'),
+        ('exercise', '운동'),
+        ('custom', '커스텀'),
+    ]
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='diary_templates',
+        verbose_name='사용자',
+        help_text='시스템 템플릿은 user=null'
+    )
+    template_type = models.CharField(
+        max_length=10,
+        choices=TEMPLATE_TYPE_CHOICES,
+        default='user',
+        verbose_name='템플릿 유형'
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default='daily',
+        verbose_name='카테고리'
+    )
+    
+    name = models.CharField(
+        max_length=50,
+        verbose_name='템플릿 이름'
+    )
+    emoji = models.CharField(
+        max_length=10,
+        default='📝',
+        verbose_name='아이콘'
+    )
+    description = models.CharField(
+        max_length=200,
+        verbose_name='설명'
+    )
+    content = models.TextField(
+        verbose_name='템플릿 내용'
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='활성화'
+    )
+    use_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='사용 횟수'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = '일기 템플릿'
+        verbose_name_plural = '일기 템플릿들'
+        ordering = ['-use_count', 'name']
+    
+    def __str__(self):
+        return f"{self.emoji} {self.name}"
+    
+    def increment_use_count(self):
+        """사용 횟수 증가"""
+        self.use_count += 1
+        self.save(update_fields=['use_count'])
+    
+    @classmethod
+    def get_system_templates(cls):
+        """시스템 템플릿 목록 반환"""
+        return cls.objects.filter(template_type='system', is_active=True)
+    
+    @classmethod
+    def get_user_templates(cls, user):
+        """사용자 템플릿 목록 반환"""
+        return cls.objects.filter(user=user, is_active=True)
+    
+    @classmethod
+    def get_all_for_user(cls, user):
+        """사용자가 사용 가능한 모든 템플릿 (시스템 + 본인 것)"""
+        from django.db.models import Q
+        return cls.objects.filter(
+            Q(template_type='system') | Q(user=user),
+            is_active=True
+        ).order_by('-use_count', 'name')

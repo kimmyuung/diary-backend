@@ -1,398 +1,25 @@
-# backend/diary/views.py
+# diary/views/diary_views.py
+"""
+일기(Diary) 관련 API 뷰
+- 일기 CRUD
+- 감정 리포트
+- 캘린더
+- 갤러리
+- 내보내기 (JSON/PDF)
+- 위치 기반 일기
+- AI 이미지 생성
+"""
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.views import APIView
-from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta, datetime
-from .models import Diary, DiaryImage
-from .serializers import DiarySerializer, DiaryImageSerializer, UserRegisterSerializer
-from .ai_service import ImageGenerator, SpeechToText
 
-
-class RegisterView(generics.CreateAPIView):
-    """
-    회원가입 API (이메일 인증 필요)
-    
-    POST /api/register/
-    
-    1. 회원가입 요청 → 계정 생성 (비활성화 상태) → 이메일로 인증코드 전송
-    2. POST /api/email/verify/ 로 인증코드 확인 → 계정 활성화
-    
-    Request Body:
-        {
-            "username": "사용자명",
-            "email": "이메일 (필수, 중복 불가)",
-            "password": "비밀번호",
-            "password_confirm": "비밀번호 확인"
-        }
-    
-    Response (201 Created):
-        {
-            "message": "인증 코드가 이메일로 전송되었습니다.",
-            "email": "이메일",
-            "requires_verification": true
-        }
-    """
-    serializer_class = UserRegisterSerializer
-    permission_classes = [AllowAny]
-
-    def create(self, request, *args, **kwargs):
-        from .models import EmailVerificationToken
-        from .email_service import send_email_verification
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        
-        # 계정 비활성화 (이메일 인증 전까지)
-        user.is_active = False
-        user.save()
-        
-        # 이메일 인증 토큰 생성 및 전송
-        token = EmailVerificationToken.generate_token(user)
-        send_email_verification(user, token)
-
-        return Response({
-            "message": "인증 코드가 이메일로 전송되었습니다. 10분 내에 인증을 완료해주세요.",
-            "email": user.email,
-            "requires_verification": True
-        }, status=status.HTTP_201_CREATED)
-
-
-class EmailVerifyView(APIView):
-    """
-    이메일 인증 확인 API
-    
-    POST /api/email/verify/
-    
-    Request Body:
-        {
-            "email": "user@example.com",
-            "code": "123456"
-        }
-    
-    Response:
-        {
-            "message": "이메일 인증이 완료되었습니다. 로그인해주세요."
-        }
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        from django.contrib.auth.models import User
-        from .models import EmailVerificationToken
-
-        email = request.data.get('email', '').strip()
-        code = request.data.get('code', '').strip()
-
-        if not email or not code:
-            return Response(
-                {"error": "이메일과 인증 코드를 입력해주세요."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "유효하지 않은 요청입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 이미 활성화된 계정
-        if user.is_active:
-            return Response(
-                {"error": "이미 인증된 계정입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 토큰 검증
-        try:
-            token = EmailVerificationToken.objects.get(
-                user=user,
-                token=code,
-                is_verified=False
-            )
-        except EmailVerificationToken.DoesNotExist:
-            return Response(
-                {"error": "유효하지 않은 인증 코드입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if token.is_expired:
-            return Response(
-                {"error": "인증 코드가 만료되었습니다. 다시 요청해주세요."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 인증 완료
-        token.is_verified = True
-        token.save()
-
-        # 계정 활성화
-        user.is_active = True
-        user.save()
-
-        return Response({
-            "message": "이메일 인증이 완료되었습니다. 로그인해주세요."
-        })
-
-
-class ResendVerificationView(APIView):
-    """
-    인증 코드 재전송 API
-    
-    POST /api/email/resend/
-    
-    Request Body:
-        {
-            "email": "user@example.com"
-        }
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        from django.contrib.auth.models import User
-        from .models import EmailVerificationToken
-        from .email_service import send_email_verification
-
-        email = request.data.get('email', '').strip()
-
-        if not email:
-            return Response(
-                {"error": "이메일을 입력해주세요."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({
-                "message": "해당 이메일로 가입된 계정이 있다면 인증 코드가 전송됩니다."
-            })
-
-        # 이미 활성화된 계정
-        if user.is_active:
-            return Response(
-                {"error": "이미 인증된 계정입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 새 토큰 생성 및 전송
-        token = EmailVerificationToken.generate_token(user)
-        send_email_verification(user, token)
-
-        return Response({
-            "message": "인증 코드가 이메일로 전송되었습니다."
-        })
-
-
-class PasswordResetRequestView(APIView):
-    """
-    비밀번호 재설정 요청 API
-    이메일로 6자리 인증 코드 전송
-    
-    POST /api/password/reset-request/
-    
-    Request Body:
-        {
-            "email": "user@example.com"
-        }
-    
-    Response:
-        {
-            "message": "인증 코드가 이메일로 전송되었습니다."
-        }
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        from django.contrib.auth.models import User
-        from .models import PasswordResetToken
-        from .email_service import send_password_reset_email
-
-        email = request.data.get('email', '').strip()
-
-        if not email:
-            return Response(
-                {"error": "이메일을 입력해주세요."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            # 보안: 이메일 존재 여부를 노출하지 않음
-            return Response({
-                "message": "해당 이메일로 가입된 계정이 있다면 인증 코드가 전송됩니다."
-            })
-
-        # 토큰 생성 및 이메일 전송
-        token = PasswordResetToken.generate_token(user)
-        email_sent = send_password_reset_email(user, token)
-
-        if email_sent:
-            return Response({
-                "message": "인증 코드가 이메일로 전송되었습니다. 30분 내에 입력해주세요."
-            })
-        else:
-            return Response(
-                {"error": "이메일 전송에 실패했습니다. 잠시 후 다시 시도해주세요."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class PasswordResetConfirmView(APIView):
-    """
-    비밀번호 재설정 확인 API
-    인증 코드 검증 후 새 비밀번호 설정
-    
-    POST /api/password/reset-confirm/
-    
-    Request Body:
-        {
-            "email": "user@example.com",
-            "code": "123456",
-            "new_password": "newPassword123"
-        }
-    
-    Response:
-        {
-            "message": "비밀번호가 성공적으로 변경되었습니다."
-        }
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        from django.contrib.auth.models import User
-        from .models import PasswordResetToken
-        from django.contrib.auth.password_validation import validate_password
-        from django.core.exceptions import ValidationError
-
-        email = request.data.get('email', '').strip()
-        code = request.data.get('code', '').strip()
-        new_password = request.data.get('new_password', '')
-
-        if not all([email, code, new_password]):
-            return Response(
-                {"error": "이메일, 인증 코드, 새 비밀번호를 모두 입력해주세요."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "유효하지 않은 요청입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 토큰 검증
-        try:
-            token = PasswordResetToken.objects.get(
-                user=user,
-                token=code,
-                is_used=False
-            )
-        except PasswordResetToken.DoesNotExist:
-            return Response(
-                {"error": "유효하지 않은 인증 코드입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if token.is_expired:
-            return Response(
-                {"error": "인증 코드가 만료되었습니다. 다시 요청해주세요."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 비밀번호 유효성 검사
-        try:
-            validate_password(new_password, user)
-        except ValidationError as e:
-            return Response(
-                {"error": list(e.messages)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 비밀번호 변경
-        user.set_password(new_password)
-        user.save()
-
-        # 토큰 사용 처리
-        token.is_used = True
-        token.save()
-
-        return Response({
-            "message": "비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요."
-        })
-
-
-class FindUsernameView(APIView):
-    """
-    아이디 찾기 API
-    이메일로 가입된 아이디 전송
-    
-    POST /api/username/find/
-    
-    Request Body:
-        {
-            "email": "user@example.com"
-        }
-    
-    Response:
-        {
-            "message": "아이디 정보가 이메일로 전송되었습니다."
-        }
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        from django.contrib.auth.models import User
-        from .email_service import send_username_email
-
-        email = request.data.get('email', '').strip()
-
-        if not email:
-            return Response(
-                {"error": "이메일을 입력해주세요."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            # 보안: 이메일 존재 여부를 노출하지 않음
-            return Response({
-                "message": "해당 이메일로 가입된 계정이 있다면 아이디 정보가 전송됩니다."
-            })
-
-        email_sent = send_username_email(user)
-
-        if email_sent:
-            return Response({
-                "message": "아이디 정보가 이메일로 전송되었습니다."
-            })
-        else:
-            return Response(
-                {"error": "이메일 전송에 실패했습니다. 잠시 후 다시 시도해주세요."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class TestConnectionView(APIView):
-    """
-    React Native 앱의 연결을 테스트하기 위한 API 뷰입니다.
-    """
-    def get(self, request):
-        return Response({
-            "status": "success",
-            "message": "Django 백엔드 연결 성공! React Native 앱이 API를 잘 호출했습니다.",
-        })
+from ..models import Diary, DiaryImage
+from ..serializers import DiarySerializer, DiaryImageSerializer
+from ..ai_service import ImageGenerator
 
 
 class DiaryViewSet(viewsets.ModelViewSet):
@@ -841,10 +468,7 @@ class DiaryViewSet(viewsets.ModelViewSet):
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import cm
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
-        import os
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
         
         diaries = Diary.objects.filter(user=request.user).order_by('-created_at')
         
@@ -983,223 +607,182 @@ class DiaryViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
-class TranscribeView(APIView):
-    """
-    음성을 텍스트로 변환하는 API 뷰입니다.
-    Whisper API를 사용하여 100개 이상의 언어를 지원합니다.
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
+    @action(detail=False, methods=['get'], url_path='heatmap')
+    def heatmap(self, request):
         """
-        음성 파일을 텍스트로 변환합니다.
+        GitHub 잔디 스타일의 감정 히트맵 데이터를 반환합니다.
         
-        Request:
-            - audio: 오디오 파일 (mp3, mp4, mpeg, mpga, m4a, wav, webm)
-            - language: 언어 코드 (선택, 기본값: 'ko')
-                       빈 문자열이면 자동 감지
+        Query Parameters:
+            - year: 연도 (기본값: 현재 연도)
         
         Response:
             {
-                "text": "변환된 텍스트",
-                "language": "사용된 언어 코드"
+                "year": 2024,
+                "total_entries": 145,
+                "streak": {
+                    "current": 7,
+                    "longest": 23
+                },
+                "emotion_colors": {
+                    "happy": "#FFD93D",
+                    "sad": "#6B7FD7",
+                    ...
+                },
+                "data": {
+                    "2024-01-01": {"count": 1, "emotion": "happy", "color": "#FFD93D"},
+                    "2024-01-02": null,
+                    ...
+                },
+                "monthly_summary": [
+                    {"month": 1, "count": 15, "dominant_emotion": "happy"},
+                    ...
+                ]
             }
         """
-        audio_file = request.FILES.get('audio')
+        from datetime import date
+        from collections import defaultdict
         
-        if not audio_file:
-            return Response(
-                {'error': '오디오 파일이 필요합니다. "audio" 필드로 파일을 업로드해주세요.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 지원되는 오디오 형식 확인
-        allowed_extensions = ['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm']
-        file_extension = audio_file.name.split('.')[-1].lower()
-        
-        if file_extension not in allowed_extensions:
-            return Response(
-                {'error': f'지원되지 않는 파일 형식입니다. 지원 형식: {", ".join(allowed_extensions)}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 언어 파라미터 처리
-        language = request.data.get('language', 'ko')
-        if language == '':  # 빈 문자열이면 자동 감지
-            language = None
+        now = timezone.now()
+        year = request.query_params.get('year', now.year)
         
         try:
-            stt = SpeechToText()
-            result = stt.transcribe(audio_file, language)
-            
-            return Response({
-                'text': result['text'],
-                'language': result['language']
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
+            year = int(year)
+        except ValueError:
             return Response(
-                {'error': f'음성 변환 중 오류가 발생했습니다: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class TranslateAudioView(APIView):
-    """
-    비영어 음성을 영어로 번역하는 API 뷰입니다.
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        """
-        비영어 음성을 영어 텍스트로 번역합니다.
-        
-        Request:
-            - audio: 오디오 파일
-        
-        Response:
-            {
-                "text": "영어로 번역된 텍스트",
-                "original_language": "원본 언어 (자동 감지)"
-            }
-        """
-        audio_file = request.FILES.get('audio')
-        
-        if not audio_file:
-            return Response(
-                {'error': '오디오 파일이 필요합니다. "audio" 필드로 파일을 업로드해주세요.'},
+                {"error": "유효하지 않은 연도입니다."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        try:
-            stt = SpeechToText()
-            result = stt.translate_to_english(audio_file)
-            
-            return Response({
-                'text': result['text'],
-                'original_language': result['original_language']
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response(
-                {'error': f'음성 번역 중 오류가 발생했습니다: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class SupportedLanguagesView(APIView):
-    """
-    음성-텍스트 변환에서 지원하는 언어 목록을 반환합니다.
-    """
-    
-    def get(self, request):
-        """
-        지원되는 주요 언어 목록을 반환합니다.
+        # 감정별 색상 매핑
+        emotion_colors = {
+            'happy': '#FFD93D',      # 노란색
+            'sad': '#6B7FD7',        # 파란색
+            'angry': '#FF6B6B',      # 빨간색
+            'anxious': '#9B59B6',    # 보라색
+            'peaceful': '#4ECDC4',   # 초록색
+            'excited': '#FF9F43',    # 주황색
+            'tired': '#95A5A6',      # 회색
+            'love': '#FF6B9D',       # 핑크색
+            None: '#E8E8E8',         # 기본 (감정 없음)
+        }
         
-        Response:
-            {
-                "languages": {"ko": "한국어", "en": "English", ...},
-                "note": "Whisper는 100개 이상의 언어를 지원합니다..."
-            }
-        """
+        # 해당 연도의 일기 조회
+        diaries = Diary.objects.filter(
+            user=request.user,
+            created_at__year=year
+        ).order_by('created_at')
+        
+        # 날짜별 데이터 집계
+        date_data = defaultdict(lambda: {'count': 0, 'emotions': []})
+        
+        for diary in diaries:
+            date_str = diary.created_at.strftime('%Y-%m-%d')
+            date_data[date_str]['count'] += 1
+            if diary.emotion:
+                date_data[date_str]['emotions'].append(diary.emotion)
+        
+        # 1년 전체 데이터 생성 (없는 날짜는 null)
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        current_date = start_date
+        
+        heatmap_data = {}
+        all_dates_with_entries = []
+        
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            
+            if date_str in date_data:
+                entry = date_data[date_str]
+                # 가장 많이 기록된 감정을 대표 감정으로
+                dominant_emotion = None
+                if entry['emotions']:
+                    emotion_counts = defaultdict(int)
+                    for em in entry['emotions']:
+                        emotion_counts[em] += 1
+                    dominant_emotion = max(emotion_counts, key=emotion_counts.get)
+                
+                heatmap_data[date_str] = {
+                    'count': entry['count'],
+                    'emotion': dominant_emotion,
+                    'color': emotion_colors.get(dominant_emotion, emotion_colors[None])
+                }
+                all_dates_with_entries.append(current_date)
+            else:
+                heatmap_data[date_str] = None
+            
+            current_date += timedelta(days=1)
+        
+        # 연속 작성일 계산
+        def calculate_streaks(dates_list):
+            if not dates_list:
+                return 0, 0
+            
+            sorted_dates = sorted(dates_list)
+            current_streak = 1
+            longest_streak = 1
+            temp_streak = 1
+            
+            for i in range(1, len(sorted_dates)):
+                diff = (sorted_dates[i] - sorted_dates[i-1]).days
+                if diff == 1:
+                    temp_streak += 1
+                    longest_streak = max(longest_streak, temp_streak)
+                elif diff > 1:
+                    temp_streak = 1
+            
+            # 현재 연속 작성일 (오늘 기준)
+            today = now.date()
+            if today in sorted_dates:
+                current_streak = 1
+                idx = sorted_dates.index(today)
+                for i in range(idx - 1, -1, -1):
+                    if (sorted_dates[i + 1] - sorted_dates[i]).days == 1:
+                        current_streak += 1
+                    else:
+                        break
+            else:
+                current_streak = 0
+            
+            return current_streak, longest_streak
+        
+        current_streak, longest_streak = calculate_streaks(all_dates_with_entries)
+        
+        # 월별 요약
+        monthly_summary = []
+        for month in range(1, 13):
+            month_diaries = diaries.filter(created_at__month=month)
+            month_count = month_diaries.count()
+            
+            dominant_emotion = None
+            dominant_color = emotion_colors[None]
+            
+            if month_count > 0:
+                emotion_counts = month_diaries.filter(
+                    emotion__isnull=False
+                ).values('emotion').annotate(
+                    count=Count('emotion')
+                ).order_by('-count').first()
+                
+                if emotion_counts:
+                    dominant_emotion = emotion_counts['emotion']
+                    dominant_color = emotion_colors.get(dominant_emotion, emotion_colors[None])
+            
+            monthly_summary.append({
+                'month': month,
+                'count': month_count,
+                'dominant_emotion': dominant_emotion,
+                'color': dominant_color
+            })
+        
         return Response({
-            'languages': SpeechToText.get_supported_languages(),
-            'note': 'Whisper는 총 100개 이상의 언어를 지원합니다. 위 목록은 주요 언어입니다. language 파라미터를 비워두면 자동으로 언어를 감지합니다.'
-        }, status=status.HTTP_200_OK)
-
-
-class PushTokenView(APIView):
-    """
-    푸시 토큰 관리 API
-    
-    POST: 푸시 토큰 등록
-    DELETE: 푸시 토큰 해제
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        """
-        푸시 토큰 등록
-        
-        Request Body:
-            {
-                "token": "ExponentPushToken[xxxxx]",
-                "device_type": "android" | "ios",
-                "device_name": "Samsung Galaxy S21" (선택)
-            }
-        
-        Response:
-            {
-                "message": "푸시 토큰이 등록되었습니다.",
-                "token_id": 1
-            }
-        """
-        from .models import PushToken
-        
-        token = request.data.get('token')
-        device_type = request.data.get('device_type', 'android')
-        device_name = request.data.get('device_name', '')
-        
-        if not token:
-            return Response(
-                {'error': '푸시 토큰이 필요합니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 기존 토큰이 있으면 업데이트, 없으면 생성
-        push_token, created = PushToken.objects.update_or_create(
-            token=token,
-            defaults={
-                'user': request.user,
-                'device_type': device_type,
-                'device_name': device_name,
-                'is_active': True,
-            }
-        )
-        
-        action = '등록' if created else '업데이트'
-        return Response({
-            'message': f'푸시 토큰이 {action}되었습니다.',
-            'token_id': push_token.id,
-        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
-    
-    def delete(self, request):
-        """
-        푸시 토큰 비활성화
-        
-        Request Body:
-            {
-                "token": "ExponentPushToken[xxxxx]"
-            }
-        
-        Response:
-            {
-                "message": "푸시 알림이 비활성화되었습니다."
-            }
-        """
-        from .models import PushToken
-        
-        token = request.data.get('token')
-        
-        if not token:
-            return Response(
-                {'error': '푸시 토큰이 필요합니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 토큰 비활성화
-        updated = PushToken.objects.filter(
-            token=token,
-            user=request.user
-        ).update(is_active=False)
-        
-        if updated:
-            return Response({
-                'message': '푸시 알림이 비활성화되었습니다.',
-            }, status=status.HTTP_200_OK)
-        else:
-            return Response(
-                {'error': '해당 토큰을 찾을 수 없습니다.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            'year': year,
+            'total_entries': diaries.count(),
+            'streak': {
+                'current': current_streak,
+                'longest': longest_streak
+            },
+            'emotion_colors': emotion_colors,
+            'data': heatmap_data,
+            'monthly_summary': monthly_summary
+        })
