@@ -72,6 +72,15 @@ sudo ufw --force enable
 echo "✅ 방화벽 설정 완료"
 
 # =============================================================================
+# 5. Certbot 설치 (Let's Encrypt)
+# =============================================================================
+echo "🔐 Certbot 설치 중..."
+
+sudo apt-get install -y certbot python3-certbot-nginx
+
+echo "✅ Certbot 설치 완료"
+
+# =============================================================================
 # 5. 앱 디렉토리 생성
 # =============================================================================
 echo "📁 앱 디렉토리 생성 중..."
@@ -112,7 +121,7 @@ echo "3. .env.production 파일 생성 및 설정"
 echo "4. ./scripts/deploy.sh 실행"
 echo ""
 echo "🔐 SSL 인증서 설정 (Let's Encrypt):"
-echo "   sudo apt-get install certbot"
-echo "   sudo certbot certonly --standalone -d your-domain.com"
-echo "   cp /etc/letsencrypt/live/your-domain.com/* ~/app/nginx/ssl/"
+echo "   도메인 준비 후 아래 명령어 실행:"
+echo "   ./scripts/setup-ssl.sh your-domain.com your-email@example.com"
 echo ""
+

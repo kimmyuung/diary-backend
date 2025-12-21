@@ -1,6 +1,63 @@
 # diary/serializers.py
 from rest_framework import serializers
+from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from .models import Diary, DiaryImage
+
+
+class UserRegisterSerializer(serializers.ModelSerializer):
+    """
+    회원가입 Serializer
+    - 사용자명, 이메일, 비밀번호 필수
+    - 비밀번호 확인 검증
+    - Django 비밀번호 검증 적용
+    """
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(
+        write_only=True, 
+        required=True, 
+        validators=[validate_password],
+        style={'input_type': 'password'}
+    )
+    password_confirm = serializers.CharField(
+        write_only=True, 
+        required=True,
+        style={'input_type': 'password'}
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'password_confirm']
+
+    def validate_username(self, value):
+        """사용자명 중복 확인"""
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("이미 사용 중인 아이디입니다.")
+        return value
+
+    def validate_email(self, value):
+        """이메일 중복 확인"""
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("이미 등록된 이메일입니다.")
+        return value
+
+    def validate(self, attrs):
+        """비밀번호 확인 검증"""
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({
+                "password_confirm": "비밀번호가 일치하지 않습니다."
+            })
+        return attrs
+
+    def create(self, validated_data):
+        """사용자 생성"""
+        validated_data.pop('password_confirm')
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password']
+        )
+        return user
 
 
 class DiaryImageSerializer(serializers.ModelSerializer):
@@ -23,6 +80,7 @@ class DiarySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'title', 'content', 'images',
             'emotion', 'emotion_score', 'emotion_emoji', 'emotion_analyzed_at',
+            'location_name', 'latitude', 'longitude',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['user', 'updated_at', 'emotion', 'emotion_score', 'emotion_analyzed_at']

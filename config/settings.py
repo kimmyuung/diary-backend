@@ -14,6 +14,48 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
+# Load environment variables first
+load_dotenv()
+
+# =============================================================================
+# Sentry 모니터링 설정 (에러 추적)
+# https://sentry.io 에서 프로젝트 생성 후 DSN 발급
+# =============================================================================
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(
+                transaction_style="url",
+                middleware_spans=True,
+            ),
+            LoggingIntegration(
+                level=None,  # Capture all logs
+                event_level="ERROR",  # Send ERROR+ as events
+            ),
+        ],
+        # 환경 구분
+        environment=os.environ.get('SENTRY_ENVIRONMENT', 'development'),
+        
+        # 성능 모니터링 (샘플링 비율)
+        traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+        
+        # 프로파일링 (성능 병목 분석)
+        profiles_sample_rate=float(os.environ.get('SENTRY_PROFILES_SAMPLE_RATE', '0.1')),
+        
+        # PII(개인정보) 전송 여부 - False로 유지 권장
+        send_default_pii=False,
+        
+        # 릴리즈 버전 (Git 커밋 해시로 자동 설정 가능)
+        release=os.environ.get('SENTRY_RELEASE', 'ai-emotion-diary@1.0.0'),
+    )
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -127,8 +169,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 
-load_dotenv()
-
 # OpenAI API Key
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
@@ -136,6 +176,20 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 # 프로덕션에서는 반드시 환경 변수로 설정할 것!
 # 생성 방법: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 DIARY_ENCRYPTION_KEY = os.environ.get('DIARY_ENCRYPTION_KEY', '')
+
+# =============================================================================
+# 이메일 설정 (비밀번호 재설정용)
+# =============================================================================
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 
+    'django.core.mail.backends.console.EmailBackend'  # 개발: 콘솔 출력
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@emotionaldiary.com')
 
 LOGGING = {
     'version': 1,
@@ -170,6 +224,11 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.MultiPartParser',  # 파일 업로드 지원
         'rest_framework.parsers.FormParser',
     ],
+    # 페이지네이션 설정
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    # 커스텀 예외 핸들러
+    'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
 }
 
 # Simple JWT 설정

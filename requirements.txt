@@ -25,5 +25,11 @@ gunicorn==21.2.0
 # Image Processing (optional)
 Pillow==10.1.0
 
+# PDF Generation
+reportlab==4.0.8
+
 # API Documentation (optional)
 drf-yasg==1.21.7
+
+# Monitoring
+sentry-sdk[django]==1.38.0
